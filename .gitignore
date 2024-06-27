@@ -4,4 +4,7 @@ id_rsa*
 *.key
 venv/
 .idea/
+run.bat
+*.pyc
+__pycache__/
 
