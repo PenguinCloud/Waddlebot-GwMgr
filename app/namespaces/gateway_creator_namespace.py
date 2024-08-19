@@ -1,6 +1,6 @@
 # Import the twitch message sender class
 
-from flask import Flask, request, make_response, jsonify, send_file
+from flask import Flask, request, make_response, jsonify, send_file, render_template
 from flask_restx import Resource, Api, fields, reqparse, abort, Namespace
 import logging
 import json
@@ -9,6 +9,7 @@ from datetime import datetime
 import base64
 import sys
 import requests
+import uuid
 # from app.test.test import test
 
 from dotenv import load_dotenv
@@ -73,6 +74,25 @@ twitch_port = os.getenv('TWITCH_PORT')
 twitch_pass = os.getenv('TWITCH_PASS')
 twitch_nick = os.getenv('TWITCH_NICK')
 
+# Check if the twitch auth url, client id, redirect uri, response type and scope are set in the environment
+if 'TWITCH_AUTH_URL' not in os.environ:
+    raise Exception('TWITCH_AUTH_URL environment variable not set')
+if 'TWITCH_AUTH_CLIENT_ID' not in os.environ:
+    raise Exception('TWITCH_AUTH_CLIENT_ID environment variable not set')
+if 'TWITCH_AUTH_REDIRECT_URI' not in os.environ:
+    raise Exception('TWITCH_AUTH_REDIRECT_URI environment variable not set')
+if 'TWITCH_AUTH_RESPONSE_TYPE' not in os.environ:
+    raise Exception('TWITCH_AUTH_RESPONSE_TYPE environment variable not set')
+if 'TWITCH_AUTH_SCOPE' not in os.environ:
+    raise Exception('TWITCH_AUTH_SCOPE environment variable not set')
+
+# Get the twitch auth url, client id, redirect uri, response type and scope from the environment
+twitch_auth_url = os.getenv('TWITCH_AUTH_URL')
+twitch_auth_client_id = os.getenv('TWITCH_AUTH_CLIENT_ID')
+twitch_auth_redirect_uri = os.getenv('TWITCH_AUTH_REDIRECT_URI')
+twitch_auth_response_type = os.getenv('TWITCH_AUTH_RESPONSE_TYPE')
+twitch_auth_scope = os.getenv('TWITCH_AUTH_SCOPE')
+
 # Function route to get the default account for a given account type
 # def get_default_account(account_type):
 #     try:
@@ -102,6 +122,14 @@ def get_gateway_servers():
         return response_data
     except Exception as e:
         return make_response(jsonify({'msg': str(e)}), 500)
+    
+# Function to generate a uuid
+def generate_uuid():
+    return str(uuid.uuid4())
+
+# Function to build the twitch auth url
+def build_twitch_auth_url(activation_code):
+    return f'{twitch_auth_url}?client_id={twitch_auth_client_id}&redirect_uri={twitch_auth_redirect_uri}&response_type={twitch_auth_response_type}&scope={twitch_auth_scope}&force_verify=true&state={activation_code}'
 
 # Function route to create a gateway
 @gateway_creator_namespace.route('/')
@@ -142,7 +170,9 @@ class GatewayCreator(Resource):
             if gateway_type_name != 'Twitch' and gateway_type_name != 'Discord':
                 return make_response(jsonify({'msg': 'Gateway type not supported. Only Twitch is currently available for support.'}), 400)
             elif gateway_type_name == 'Twitch' and default_twitch_server is not None:
-                response = requests.post(gateway_creation_url, json={'gateway_server_name': default_twitch_server, 'gateway_type_name': gateway_type_name, 'channel_id': channel_id})
+                # Generate an activation code
+                activation_code = generate_uuid()
+                response = requests.post(gateway_creation_url, json={'gateway_server_name': default_twitch_server, 'gateway_type_name': gateway_type_name, 'channel_id': channel_id, 'activation_key': activation_code})
 
                 # The response payload should be a JSON object and contain a key 'msg'
                 response_payload = response.json()
@@ -162,8 +192,12 @@ class GatewayCreator(Resource):
                 if status == 201:
                     # Create the twitch message sender object
                     twitch_message_sender = Twitch_Message_Sender(twitch_host, int(twitch_port), twitch_nick, twitch_pass, channel_id)
+                    # Build the twitch auth url
+                    twitch_auth_url = build_twitch_auth_url(activation_code)
+                    # twitch_auth_url = "TEST"
                     # Send the message to the twitch channel
-                    twitch_msg = f"Hi there! Welcome to WaddleBot, {channel_id}! Your gateway has been created successfully. The last step is to add the account that sent this message as a moderator in your channel. Once you have done that, please type !verify in the chat to verify your account. Thank you!"
+                    twitch_msg = f"Welcome to WaddleBot, {channel_id}! First of all, please mod WaddleBot on your channel. Then, click on the following link to authenticate your account: {twitch_auth_url}."
+                    # twitch_msg = f"{twitch_auth_url}"
                     twitch_message_sender.send_message(twitch_msg)
 
                     return make_response(jsonify({'msg': msg}), 200)
