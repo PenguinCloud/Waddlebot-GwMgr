@@ -221,7 +221,9 @@ class GatewayCreator(Resource):
                 print(response_payload)
                 # If the server creation process was successful, create the gateway route
                 if response_payload['status'] == 201:
-                    response = requests.post(gateway_creation_url, json={'gateway_server_name': server_name, 'gateway_type_name': gateway_type_name, 'channel_id': "general"})
+                    # Generate an activation code
+                    activation_code = generate_uuid()
+                    response = requests.post(gateway_creation_url, json={'gateway_server_name': server_name, 'gateway_type_name': gateway_type_name, 'channel_id': "general", 'activation_key': activation_code})
 
                     # The response payload should be a JSON object and contain a key 'msg'
                     response_payload = response.json()
