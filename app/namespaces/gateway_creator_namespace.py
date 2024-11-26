@@ -14,7 +14,10 @@ import uuid
 
 from dotenv import load_dotenv
 from message_sender.twitch_msg import Twitch_Message_Sender
+from message_sender.discord_msg import Discord_Message_Sender
 
+# Set the logging level to INFO
+logging.basicConfig(level=logging.INFO)
 
 # This scripts handles the creation of a gateway in the application, as a namespace
 
@@ -92,6 +95,16 @@ twitch_auth_client_id = os.getenv('TWITCH_AUTH_CLIENT_ID')
 twitch_auth_redirect_uri = os.getenv('TWITCH_AUTH_REDIRECT_URI')
 twitch_auth_response_type = os.getenv('TWITCH_AUTH_RESPONSE_TYPE')
 twitch_auth_scope = os.getenv('TWITCH_AUTH_SCOPE')
+
+# Check if the discord token and bot invite URL is included in the environment
+if 'DISCORD_TOKEN' not in os.environ:
+    raise Exception('DISCORD_TOKEN environment variable not set')
+if 'DISCORD_BOT_INVITE_URL' not in os.environ:
+    raise Exception('DISCORD_BOT_INVITE_URL environment variable not set')
+
+# Get the discord token and invite URL from the environment
+discord_token = os.getenv('DISCORD_TOKEN')
+discord_bot_invite_url = os.getenv('DISCORD_BOT_INVITE_URL')
 
 # Function route to get the default account for a given account type
 # def get_default_account(account_type):
@@ -218,17 +231,23 @@ class GatewayCreator(Resource):
                 if 'msg' not in response_payload:
                     return make_response(jsonify({'msg': 'Something went wrong while creating the gateway. Please try again later, or contact a technician for further assistance'}), 500)
                 
-                print(response_payload)
+                logging.info(response_payload)
                 # If the server creation process was successful, create the gateway route
                 if response_payload['status'] == 201:
+                    logging.info(f"Server {server_name} created successfully. Creating gateway now.")
+
                     # Generate an activation code
                     activation_code = generate_uuid()
                     response = requests.post(gateway_creation_url, json={'gateway_server_name': server_name, 'gateway_type_name': gateway_type_name, 'channel_id': "general", 'activation_key': activation_code})
+
+                    logging.info(f"Got a response from the gateway creation service")
 
                     # The response payload should be a JSON object and contain a key 'msg'
                     response_payload = response.json()
                     if 'msg' not in response_payload:
                         return make_response(jsonify({'msg': 'Something went wrong while creating the gateway. Please try again later, or contact a technician for further assistance'}), 500)
+
+                    logging.info(f"Got a message from the gateway creation service")
 
                     # Return the response payload msg value from the gateway creation service
                     msg = response_payload['msg']
@@ -239,13 +258,29 @@ class GatewayCreator(Resource):
                         
                     status = response_payload['status']
 
+                    logging.info(f"Got a status of {status}")
+
                     # If the gateway was created successfully, send a message to the discord channel
                     if status == 201:
+                        logging.info(f"Starting the discord message sending process")
+
+                        # Create a message to send to the discord channel
+                        discord_msg = f"Welcome to WaddleBot, {server_name}! Please follow the following link to add the bot to your server: {discord_bot_invite_url}. Afterwards, your set up is complete! Enjoy using WaddleBot!"
+
+                        # Create the discord message sender object
+                        logging.info(f"Creating discord message sender object")
+                        discord_message_sender = Discord_Message_Sender(discord_token, server_name, discord_msg)
+
+
+                        # Send the message to the discord channel
+                        logging.info(f"Sending message to discord channel {server_name}")
+                        discord_message_sender.send_message()
+
                         return make_response(jsonify({'msg': msg}), 200)
                     else:
                         return make_response(jsonify({'msg': msg}), 500)
                 else:
-                    print("AN ERROR OCURRED")
+                    logging.info("AN ERROR OCURRED")
                     if 'msg' in response_payload:
                         return make_response(jsonify({'msg': response_payload['msg']}), 500)
                     return make_response(jsonify({'msg': 'Something went wrong while creating the gateway. Please try again later, or contact a technician for further assistance.'}), 500)
