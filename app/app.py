@@ -18,7 +18,7 @@ app = Flask(__name__)
 
 app.logger.setLevel(logging.INFO)
 
-api = Api(app, version='1.0', title='WADDLEBOT GATEWAY CREATION API', description='API for the creation of gateways for waddlebot', validate=True)
+api = Api(app, version='1.1', title='WADDLEBOT GATEWAY CREATION API', description='API for the creation of gateways for waddlebot', validate=True)
 
 api.add_namespace(gateway_creator_namespace)
 
